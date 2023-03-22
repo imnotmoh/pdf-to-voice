@@ -1,8 +1,7 @@
 import os
+import time
 
 import requests
-import vlc
-from playsound import playsound
 
 
 
@@ -10,49 +9,64 @@ from playsound import playsound
 
 
 def audio(text):
-    url = "https://cloudlabs-text-to-speech.p.rapidapi.com/synthesize"
-    header = {
-        'X-RapidAPI-Key': os.environ.get('cloudlad_apikey'),
-        'X-RapidAPI-Host': 'cloudlabs-text-to-speech.p.rapidapi.com',
+
+    url = "https://large-text-to-speech.p.rapidapi.com/tts"
+    headers = {
+	"content-type": "application/json",
+	"X-RapidAPI-Key": os.environ.get('large_text_api_key'),
+	"X-RapidAPI-Host": "large-text-to-speech.p.rapidapi.com"
     }
+
     body = {
-        "voice_code": "en-US-1",
-        "text": f"{text}"
+        "text":f"{text}"
     }
-    response = requests.post(url=url, data=body, headers=header)
+    # make request to the api
+    response = requests.post(url=url,headers=headers,json=body)
     response.raise_for_status()
-    return response.json()['result']['audio_url']
+    # to wait for the api to process the text to audio
+    time.sleep(response.json().get("eta") + 15)
+
+    param  = {
+        "id":response.json().get("id")
+    }
+    # get the url of the audio
+    audio_url = requests.get(url,params=param, headers=headers)
+    audio_url.raise_for_status()
+    # returns the url
+    return [audio_url.json().get("url"),audio_url.json().get("id")]
+
 
 
 def play_audio(url):
-    print(url.split()[-1])
     import pygame
-    # download the MP3 file from the URL
-    response = requests.get(url)
-    open(url.split('/')[-1], 'wb').write(response.content)
-
-    # initialize pygame mixer
-    pygame.mixer.init()
-
-    # load the MP3 file
-    pygame.mixer.music.load(url.split('/')[-1])
-
-    # play the MP3 file
-    pygame.mixer.music.play()
-
-    # keep the program running until the music ends
-    while pygame.mixer.music.get_busy():
-        continue
+    # download the Wav file from the response_URL
+    response = requests.get(url[0])
+    open(f"{url[1]}.wav", 'wb').write(response.content)
+    from pydub import AudioSegment
+    from pydub.playback import play
+    # play the audio
+    audio = AudioSegment.from_wav(f"{url[1]}.wav")
+    play(audio)
 
 
 def pdf_to_string(doc:str):
+    # process the pdf
     import PyPDF2
     with open(doc,'rb') as file:
         pdfreader = PyPDF2.PdfReader(file)
+        # convert it into an api readable format
+        string = pdfreader.pages[0].extract_text()
+        strip = [i.strip() for i in string.split()]
+        return ' '.join(strip)
 
-        return pdfreader.pages[0].extract_text()
+
 
 text = pdf_to_string("Document 4-2.pdf")
-
 audio = audio(text)
 play_audio(audio)
+
+
+
+
+
+
